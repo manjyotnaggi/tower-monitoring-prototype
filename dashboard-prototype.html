@@ -1,0 +1,1814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tower Monitoring Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+            background: #f8fafc;
+            color: #0f172a;
+        }
+
+        .app {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* Top Filter Bar */
+        .filter-bar {
+            background: white;
+            border-bottom: 1px solid #e2e8f0;
+            padding: 16px 24px;
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        .filter-controls {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .route-button {
+            padding: 10px 16px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .route-button:hover:not(:disabled) {
+            background: #2563eb;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+        }
+
+        .route-button:disabled {
+            background: #cbd5e1;
+            color: #94a3b8;
+            cursor: not-allowed;
+        }
+
+        .incident-button {
+            padding: 10px 16px;
+            background: #8b5cf6;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .incident-button:hover {
+            background: #7c3aed;
+            box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+        }
+
+        /* Route Modal */
+        .route-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .route-modal.active {
+            display: flex;
+        }
+
+        .route-modal-content {
+            background: white;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        /* Incident Dashboard Modal */
+        .incident-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .incident-modal.active {
+            display: flex;
+        }
+
+        .incident-modal-content {
+            background: white;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 800px;
+            max-height: 85vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .incident-modal-header {
+            padding: 24px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .incident-modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .incident-modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .incident-modal-close:hover {
+            color: #475569;
+        }
+
+        .incident-modal-body {
+            padding: 24px;
+        }
+
+        .incident-metrics {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+
+        .incident-metric-card {
+            padding: 20px;
+            border-radius: 12px;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+        }
+
+        .incident-metric-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .incident-metric-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 4px;
+        }
+
+        .incident-metric-detail {
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        .incident-timeframe {
+            padding: 16px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+            margin-bottom: 24px;
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .incident-timeframe label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #475569;
+        }
+
+        .incident-timeframe select {
+            padding: 8px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        .incident-value-section {
+            padding: 20px;
+            background: #f0f9ff;
+            border-radius: 12px;
+            border: 1px solid #bfdbfe;
+            margin-top: 20px;
+        }
+
+        .incident-value-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #1e40af;
+            margin-bottom: 12px;
+        }
+
+        .incident-value-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #dbeafe;
+        }
+
+        .incident-value-item:last-child {
+            border-bottom: none;
+        }
+
+        .incident-value-label {
+            font-size: 13px;
+            color: #475569;
+        }
+
+        .incident-value-number {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1e40af;
+        }
+
+        .incident-value-saving {
+            color: #16a34a;
+        }
+
+        .route-modal-header {
+            padding: 24px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .route-modal-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .route-modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .route-modal-close:hover {
+            color: #475569;
+        }
+
+        .route-modal-body {
+            padding: 24px;
+        }
+
+        .route-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .route-stat {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 16px;
+            border: 1px solid #e2e8f0;
+            text-align: center;
+        }
+
+        .route-stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 4px;
+        }
+
+        .route-stat-label {
+            font-size: 12px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .route-list-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #0f172a;
+            margin-bottom: 12px;
+        }
+
+        .route-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .route-item {
+            padding: 12px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border-left: 4px solid;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+
+        .route-item.critical {
+            border-left-color: #ef4444;
+            background: #fef2f2;
+        }
+
+        .route-item.warning {
+            border-left-color: #f59e0b;
+            background: #fffbeb;
+        }
+
+        .route-item.healthy {
+            border-left-color: #10b981;
+            background: #ecfdf5;
+        }
+
+        .route-item-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            flex: 1;
+        }
+
+        .route-item-title {
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        .route-item-detail {
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .route-item-order {
+            background: white;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #0f172a;
+            margin-left: 12px;
+            flex-shrink: 0;
+        }
+
+        .filter-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            min-width: 80px;
+        }
+
+        select {
+            padding: 10px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            background: white;
+            color: #0f172a;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-width: 180px;
+        }
+
+        select:hover {
+            border-color: #94a3b8;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        /* Main Content */
+        .content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 340px;
+            background: #ffffff;
+            border-right: 1px solid #e2e8f0;
+            padding: 24px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            box-shadow: inset -1px 0 0 #e2e8f0;
+        }
+
+        .sidebar-section {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .sidebar-header {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .sidebar-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .sidebar-subtitle {
+            font-size: 28px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .last-update {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 8px;
+        }
+
+        /* Status Summary */
+        .status-summary {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .status-card {
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .status-card.healthy {
+            background: #ecfdf5;
+            border: 1px solid #d1fae5;
+        }
+
+        .status-card.warning {
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+        }
+
+        .status-card.critical {
+            background: #fef2f2;
+            border: 1px solid #fee2e2;
+        }
+
+        .status-count {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+
+        .status-card.healthy .status-count { color: #10b981; }
+        .status-card.warning .status-count { color: #f59e0b; }
+        .status-card.critical .status-count { color: #ef4444; }
+
+        .status-label {
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-card.healthy .status-label { color: #047857; }
+        .status-card.warning .status-label { color: #b45309; }
+        .status-card.critical .status-label { color: #991b1b; }
+
+        /* Notifications Section */
+        .notifications-section {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 12px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .notifications-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            padding: 4px 0;
+        }
+
+        .notifications-header-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .notifications-toggle {
+            font-size: 12px;
+            color: #94a3b8;
+            transition: transform 0.2s;
+        }
+
+        .notifications-toggle.expanded {
+            transform: rotate(180deg);
+        }
+
+        .notifications-list {
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .notifications-list.visible {
+            display: flex;
+        }
+
+        .notification-item {
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            line-height: 1.4;
+            border-left: 3px solid;
+        }
+
+        .notification-item.critical {
+            background: #fef2f2;
+            border-left-color: #ef4444;
+            color: #991b1b;
+        }
+
+        .notification-item.warning {
+            background: #fffbeb;
+            border-left-color: #f59e0b;
+            color: #b45309;
+        }
+
+        .notification-item.info {
+            background: #eff6ff;
+            border-left-color: #3b82f6;
+            color: #1e40af;
+        }
+
+        .notification-title {
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        /* Analytics Section */
+        .analytics-section {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 12px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .analytics-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            font-size: 12px;
+        }
+
+        .metric-name {
+            color: #64748b;
+        }
+
+        .metric-value {
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .metric-label {
+            font-size: 10px;
+            color: #94a3b8;
+        }
+
+        .trend {
+            font-size: 10px;
+            color: #ef4444;
+        }
+
+        .trend.positive {
+            color: #10b981;
+        }
+
+        .simple-chart {
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            height: 50px;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .chart-bar {
+            flex: 1;
+            background: #3b82f6;
+            border-radius: 2px;
+        }
+
+        /* Main Content */
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            background: white;
+        }
+
+        /* Map Container */
+        .map-container {
+            flex: 1;
+            position: relative;
+            background: white;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+
+        .leaflet-control-zoom {
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .leaflet-control-zoom-in,
+        .leaflet-control-zoom-out {
+            border: none;
+            background: white;
+            color: #0f172a;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .leaflet-control-zoom-in:hover,
+        .leaflet-control-zoom-out:hover {
+            background: #f8fafc;
+        }
+
+        /* Tower Markers */
+        .tower-marker {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 12px;
+            color: white;
+            border: 2px solid white;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tower-marker:hover {
+            transform: scale(1.2);
+        }
+
+        .tower-marker.healthy { background: #10b981; }
+        .tower-marker.warning { background: #f59e0b; }
+        .tower-marker.critical { background: #ef4444; }
+
+        /* Detail Panel */
+        .detail-panel {
+            position: absolute;
+            bottom: 24px;
+            right: 24px;
+            z-index: 400;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 25px rgba(0, 0, 0, 0.1);
+            width: 380px;
+            max-height: 500px;
+            overflow-y: auto;
+            animation: slideUp 0.3s ease-out;
+            display: none;
+        }
+
+        .detail-panel.active {
+            display: block;
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .detail-header {
+            padding: 20px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+        }
+
+        .detail-title {
+            font-size: 18px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .detail-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            color: #94a3b8;
+            cursor: pointer;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .detail-close:hover {
+            color: #475569;
+        }
+
+        .detail-content {
+            padding: 20px;
+        }
+
+        .detail-section {
+            margin-bottom: 20px;
+        }
+
+        .detail-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .section-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
+        }
+
+        .sensor-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .sensor-item {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .sensor-label {
+            font-size: 11px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .sensor-value {
+            font-size: 18px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .info-item {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .info-label {
+            font-size: 11px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .info-value {
+            font-size: 13px;
+            font-weight: 600;
+            color: #0f172a;
+        }
+
+        /* Status Reasoning Section */
+        .status-reasoning {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 12px;
+            border-left: 4px solid;
+            margin-top: 4px;
+        }
+
+        .status-reasoning.healthy {
+            border-left-color: #10b981;
+            background: #ecfdf5;
+        }
+
+        .status-reasoning.warning {
+            border-left-color: #f59e0b;
+            background: #fffbeb;
+        }
+
+        .status-reasoning.critical {
+            border-left-color: #ef4444;
+            background: #fef2f2;
+        }
+
+        .reasoning-title {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .reasoning-healthy { color: #047857; }
+        .reasoning-warning { color: #b45309; }
+        .reasoning-critical { color: #991b1b; }
+
+        .reasoning-items {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .reasoning-item {
+            font-size: 12px;
+            line-height: 1.4;
+            color: #475569;
+        }
+
+        .reasoning-item.pass {
+            color: #047857;
+        }
+
+        .reasoning-item.fail {
+            color: #991b1b;
+        }
+
+        .reasoning-icon {
+            font-weight: 700;
+            margin-right: 4px;
+        }
+
+        .reasoning-action {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .reasoning-action.healthy {
+            border-top-color: #d1fae5;
+            color: #047857;
+        }
+
+        .reasoning-action.warning {
+            border-top-color: #fde68a;
+            color: #b45309;
+        }
+
+        .reasoning-action.critical {
+            border-top-color: #fee2e2;
+            color: #991b1b;
+        }
+
+        @media (max-width: 1024px) {
+            .sidebar { width: 300px; }
+            .detail-panel { width: 320px; }
+        }
+
+        @media (max-width: 768px) {
+            .filter-bar { flex-direction: column; gap: 8px; }
+            .content { flex-direction: column; }
+            .sidebar {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid #e2e8f0;
+                padding: 16px;
+                max-height: 200px;
+                gap: 12px;
+            }
+            .map-container { flex: 1; }
+            .detail-panel { width: calc(100% - 48px); }
+            select { min-width: 120px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Top Filter Bar -->
+        <div class="filter-bar">
+            <div class="filter-controls">
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <label class="filter-label">Region</label>
+                    <select id="regionFilter">
+                        <option value="">All Regions</option>
+                        <option value="California">California</option>
+                        <option value="Texas">Texas</option>
+                        <option value="New York">New York</option>
+                        <option value="Florida">Florida</option>
+                        <option value="Illinois">Illinois</option>
+                        <option value="Washington">Washington</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <label class="filter-label">Carrier</label>
+                    <select id="carrierFilter">
+                        <option value="">All Carriers</option>
+                        <option value="Carrier A">Carrier A</option>
+                        <option value="Carrier B">Carrier B</option>
+                        <option value="Carrier C">Carrier C</option>
+                    </select>
+                </div>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                    <label class="filter-label">Status</label>
+                    <select id="statusFilter">
+                        <option value="">All Status</option>
+                        <option value="healthy">Healthy</option>
+                        <option value="warning">Warning</option>
+                        <option value="critical">Critical</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display: flex; gap: 12px;">
+                <button class="route-button" id="routeButton" disabled onclick="generateMaintenanceRoute()">
+                    Create Maintenance Route
+                </button>
+                <button class="incident-button" onclick="openIncidentDashboard()">
+                    Incidents & Impact
+                </button>
+            </div>
+        </div>
+
+        <!-- Route Modal -->
+        <div class="route-modal" id="routeModal">
+            <div class="route-modal-content">
+                <div class="route-modal-header">
+                    <div class="route-modal-title">Recommended Maintenance Route</div>
+                    <button class="route-modal-close" onclick="closeRouteModal()">✕</button>
+                </div>
+                <div class="route-modal-body">
+                    <div class="route-stats">
+                        <div class="route-stat">
+                            <div class="route-stat-value" id="routeTowerCount">0</div>
+                            <div class="route-stat-label">Towers</div>
+                        </div>
+                        <div class="route-stat">
+                            <div class="route-stat-value" id="routeDistance">0</div>
+                            <div class="route-stat-label">Miles</div>
+                        </div>
+                        <div class="route-stat">
+                            <div class="route-stat-value" id="routeHours">0</div>
+                            <div class="route-stat-label">Hours</div>
+                        </div>
+                    </div>
+
+                    <div class="route-list-title">Visit Order (Priority-based)</div>
+                    <div class="route-list" id="routeList">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Incident Dashboard Modal -->
+        <div class="incident-modal" id="incidentModal">
+            <div class="incident-modal-content">
+                <div class="incident-modal-header">
+                    <div class="incident-modal-title">Incidents & Impact Analysis</div>
+                    <button class="incident-modal-close" onclick="closeIncidentDashboard()">✕</button>
+                </div>
+                <div class="incident-modal-body">
+                    <div class="incident-timeframe">
+                        <label for="incidentTimeframe">Time Period:</label>
+                        <select id="incidentTimeframe" onchange="updateIncidentMetrics()">
+                            <option value="30">Last 30 Days</option>
+                            <option value="60">Last 60 Days</option>
+                            <option value="90" selected>Last 90 Days</option>
+                        </select>
+                    </div>
+
+                    <div class="incident-metrics">
+                        <div class="incident-metric-card">
+                            <div class="incident-metric-label">Total Incidents</div>
+                            <div class="incident-metric-value" id="totalIncidents">24</div>
+                            <div class="incident-metric-detail" id="incidentsDetail">Critical: 3, Warning: 8, Other: 13</div>
+                        </div>
+                        <div class="incident-metric-card">
+                            <div class="incident-metric-label">Total Downtime</div>
+                            <div class="incident-metric-value" id="totalDowntime">28h</div>
+                            <div class="incident-metric-detail" id="downtimeDetail">Avg 70 min per incident</div>
+                        </div>
+                        <div class="incident-metric-card">
+                            <div class="incident-metric-label">Incident Rate</div>
+                            <div class="incident-metric-value" id="incidentRate">8.0/mo</div>
+                            <div class="incident-metric-detail" id="rateDetail">Per 500 towers</div>
+                        </div>
+                    </div>
+
+                    <div class="incident-value-section">
+                        <div class="incident-value-title">💰 Estimated Impact & Savings</div>
+                        <div class="incident-value-item">
+                            <span class="incident-value-label">Without this platform (reactive)</span>
+                            <span class="incident-value-number">$456,000</span>
+                        </div>
+                        <div class="incident-value-item">
+                            <span class="incident-value-label">Downtime cost @ $10K/incident</span>
+                            <span class="incident-value-number">$240,000</span>
+                        </div>
+                        <div class="incident-value-item">
+                            <span class="incident-value-label">Crew dispatch inefficiency</span>
+                            <span class="incident-value-number">$65,000</span>
+                        </div>
+                        <div class="incident-value-item">
+                            <span class="incident-value-label">SLA penalties & customer impact</span>
+                            <span class="incident-value-number">$151,000</span>
+                        </div>
+                        <hr style="margin: 12px 0; border: none; border-top: 1px solid #bfdbfe;">
+                        <div class="incident-value-item">
+                            <span class="incident-value-label"><strong>With this platform (proactive)</strong></span>
+                            <span class="incident-value-number incident-value-saving">$128,000</span>
+                        </div>
+                        <div class="incident-value-item">
+                            <span class="incident-value-label"><strong>Net Annual Savings</strong></span>
+                            <span class="incident-value-number incident-value-saving"><strong>$328,000</strong></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="content">
+            <!-- Sidebar -->
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <div class="sidebar-title">Tower Network</div>
+                    <div class="sidebar-subtitle" id="totalCount">50,000</div>
+                    <div class="last-update">Last updated: <span id="overallLastUpdate">Just now</span></div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="status-summary">
+                        <div class="status-card healthy">
+                            <div class="status-count" id="healthyCount">47,850</div>
+                            <div class="status-label">Healthy</div>
+                        </div>
+                        <div class="status-card warning">
+                            <div class="status-count" id="warningCount">1,920</div>
+                            <div class="status-label">Warning</div>
+                        </div>
+                        <div class="status-card critical">
+                            <div class="status-count" id="criticalCount">230</div>
+                            <div class="status-label">Critical</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="notifications-section">
+                        <div class="notifications-header" onclick="toggleNotifications()">
+                            <span class="notifications-header-title">Alerts & Notifications</span>
+                            <span class="notifications-toggle" id="notifToggle">▼</span>
+                        </div>
+                        <div class="notifications-list" id="notificationsList">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <div class="sidebar-section">
+                    <div class="analytics-section">
+                        <div class="analytics-title">Network Analytics</div>
+                        <div class="metric">
+                            <span class="metric-name">Avg Uptime</span>
+                            <span class="metric-value" id="analyticsUptime">99.8%</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-name">Avg Temperature</span>
+                            <span class="metric-value" id="analyticsTemp">45°C</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-name">Avg Power</span>
+                            <span class="metric-value" id="analyticsPower">87%</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-name">Avg Transmission</span>
+                            <span class="metric-value" id="analyticsTransmission">82%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Map Area -->
+            <div class="main">
+                <div class="map-container">
+                    <div id="map"></div>
+                </div>
+
+                <div class="detail-panel" id="detailPanel">
+                    <div class="detail-header">
+                        <div>
+                            <div class="detail-title" id="detailTitle">Tower ID</div>
+                            <div style="font-size: 12px; color: #64748b; margin-top: 4px;" id="detailAddress"></div>
+                        </div>
+                        <button class="detail-close" onclick="closeDetailPanel()">✕</button>
+                    </div>
+                    <div class="detail-content">
+                        <div class="detail-section">
+                            <div class="section-title">Sensor Data</div>
+                            <div class="sensor-grid">
+                                <div class="sensor-item">
+                                    <div class="sensor-label">Power</div>
+                                    <div class="sensor-value" id="detailPower">-</div>
+                                </div>
+                                <div class="sensor-item">
+                                    <div class="sensor-label">Temperature</div>
+                                    <div class="sensor-value" id="detailTemperature">-</div>
+                                </div>
+                                <div class="sensor-item">
+                                    <div class="sensor-label">Uptime</div>
+                                    <div class="sensor-value" id="detailUptime">-</div>
+                                </div>
+                                <div class="sensor-item">
+                                    <div class="sensor-label">Transmission</div>
+                                    <div class="sensor-value" id="detailTransmission">-</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="detail-section">
+                            <div class="section-title">Information</div>
+                            <div class="info-grid">
+                                <div class="info-item">
+                                    <div class="info-label">Carrier</div>
+                                    <div class="info-value" id="detailCarrier">-</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Region</div>
+                                    <div class="info-value" id="detailRegion">-</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Last Updated</div>
+                                    <div class="info-value" id="detailLastUpdate">-</div>
+                                </div>
+                                <div class="info-item">
+                                    <div class="info-label">Last Incident</div>
+                                    <div class="info-value" id="detailLastIncident">-</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="detail-section">
+                        <div class="status-reasoning" id="statusReasoning">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Tower data generator with realistic US coordinates
+        function generateTowers() {
+            const regions = {
+                California: { lat: 36.1, lng: -120.0, count: 350 },
+                Texas: { lat: 31.5, lng: -98.5, count: 300 },
+                'New York': { lat: 42.5, lng: -75.5, count: 250 },
+                Florida: { lat: 27.5, lng: -81.5, count: 280 },
+                Illinois: { lat: 40.0, lng: -89.5, count: 250 },
+                Washington: { lat: 47.5, lng: -120.5, count: 200 }
+            };
+
+            const carriers = ['Carrier A', 'Carrier B', 'Carrier C'];
+            const statuses = ['healthy', 'warning', 'critical'];
+            const cities = {
+                California: ['San Francisco', 'Los Angeles', 'San Diego', 'Sacramento', 'Fresno'],
+                Texas: ['Houston', 'Dallas', 'Austin', 'San Antonio', 'Fort Worth'],
+                'New York': ['New York', 'Buffalo', 'Albany', 'Rochester', 'Syracuse'],
+                Florida: ['Miami', 'Orlando', 'Tampa', 'Jacksonville', 'Fort Lauderdale'],
+                Illinois: ['Chicago', 'Springfield', 'Peoria', 'Rockford', 'Aurora'],
+                Washington: ['Seattle', 'Spokane', 'Tacoma', 'Vancouver', 'Bellevue']
+            };
+
+            let towers = [];
+            let id = 1;
+
+            for (const [region, config] of Object.entries(regions)) {
+                for (let i = 0; i < config.count; i++) {
+                    const status = Math.random() > 0.95 ? 'critical' : Math.random() > 0.92 ? 'warning' : 'healthy';
+                    const cityList = cities[region];
+                    const city = cityList[Math.floor(Math.random() * cityList.length)];
+
+                    towers.push({
+                        id: `TWR-${String(id).padStart(6, '0')}`,
+                        lat: config.lat + (Math.random() - 0.5) * 3,
+                        lng: config.lng + (Math.random() - 0.5) * 3,
+                        region: region,
+                        carrier: carriers[Math.floor(Math.random() * carriers.length)],
+                        status: status,
+                        power: Math.floor(Math.random() * 40 + 60),
+                        temperature: Math.floor(Math.random() * 20 + 35),
+                        uptime: Math.floor(Math.random() * 5 + 95),
+                        transmission: Math.floor(Math.random() * 30 + 70),
+                        lastUpdate: getRandomTime(),
+                        lastIncident: status === 'healthy' ? 'None' : Math.floor(Math.random() * 12) + 1 + 'h ago',
+                        city: city
+                    });
+                    id++;
+                }
+            }
+
+            return towers;
+        }
+
+        function getRandomTime() {
+            const mins = Math.floor(Math.random() * 60);
+            return `${mins}m ago`;
+        }
+
+        // Initialize
+        let towers = generateTowers();
+        let filteredTowers = towers;
+        let markers = {};
+        let selectedTower = null;
+        let map;
+
+        const regionBounds = {
+            California: { center: [36.1, -120.0], zoom: 6 },
+            Texas: { center: [31.5, -98.5], zoom: 6 },
+            'New York': { center: [42.5, -75.5], zoom: 6 },
+            Florida: { center: [27.5, -81.5], zoom: 6 },
+            Illinois: { center: [40.0, -89.5], zoom: 6 },
+            Washington: { center: [47.5, -120.5], zoom: 6 },
+            '': { center: [38, -95], zoom: 3.5 }
+        };
+
+        // Initialize map
+        function initMap() {
+            map = L.map('map').setView([38, -95], 4);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap',
+                maxZoom: 15
+            }).addTo(map);
+
+            renderMarkers();
+            setupEventListeners();
+            updateSidebar();
+        }
+
+        function renderMarkers() {
+            Object.values(markers).forEach(marker => map.removeLayer(marker));
+            markers = {};
+
+            filteredTowers.forEach(tower => {
+                const el = document.createElement('div');
+                el.className = `tower-marker ${tower.status}`;
+                el.innerHTML = tower.id.split('-')[1].slice(-2);
+                el.onclick = () => showTowerDetail(tower);
+
+                const marker = L.marker([tower.lat, tower.lng], {
+                    icon: L.divIcon({ html: el, className: '' })
+                }).addTo(map);
+
+                markers[tower.id] = marker;
+            });
+        }
+
+        function updateSidebar() {
+            // Update total count and status cards
+            const healthy = filteredTowers.filter(t => t.status === 'healthy').length;
+            const warning = filteredTowers.filter(t => t.status === 'warning').length;
+            const critical = filteredTowers.filter(t => t.status === 'critical').length;
+            const total = filteredTowers.length;
+
+            document.getElementById('totalCount').textContent = total.toLocaleString();
+            document.getElementById('healthyCount').textContent = healthy.toLocaleString();
+            document.getElementById('warningCount').textContent = warning.toLocaleString();
+            document.getElementById('criticalCount').textContent = critical.toLocaleString();
+
+            // Update analytics
+            const avgUptime = Math.round(filteredTowers.reduce((a, b) => a + b.uptime, 0) / Math.max(1, filteredTowers.length));
+            const avgTemp = Math.round(filteredTowers.reduce((a, b) => a + b.temperature, 0) / Math.max(1, filteredTowers.length));
+            const avgPower = Math.round(filteredTowers.reduce((a, b) => a + b.power, 0) / Math.max(1, filteredTowers.length));
+            const avgTransmission = Math.round(filteredTowers.reduce((a, b) => a + b.transmission, 0) / Math.max(1, filteredTowers.length));
+
+            document.getElementById('analyticsUptime').textContent = avgUptime + '%';
+            document.getElementById('analyticsTemp').textContent = avgTemp + '°C';
+            document.getElementById('analyticsPower').textContent = avgPower + '%';
+            document.getElementById('analyticsTransmission').textContent = avgTransmission + '%';
+
+            // Update notifications based on filtered data
+            updateNotifications();
+
+            // Update chart
+            updateChart();
+        }
+
+        function updateNotifications() {
+            const regionFilter = document.getElementById('regionFilter').value;
+            const carrierFilter = document.getElementById('carrierFilter').value;
+            const statusFilter = document.getElementById('statusFilter').value;
+
+            let notifications = [];
+
+            const criticalCount = filteredTowers.filter(t => t.status === 'critical').length;
+            if (criticalCount > 0) {
+                notifications.push({
+                    type: 'critical',
+                    title: 'Critical Alert',
+                    message: `${criticalCount} tower${criticalCount > 1 ? 's' : ''} ${regionFilter ? 'in ' + regionFilter : 'network-wide'} require immediate attention`
+                });
+            }
+
+            const warningCount = filteredTowers.filter(t => t.status === 'warning').length;
+            if (warningCount > 0) {
+                notifications.push({
+                    type: 'warning',
+                    title: 'High Temperature',
+                    message: `${warningCount} tower${warningCount > 1 ? 's' : ''} exceed${warningCount > 1 ? '' : 's'} normal operating range`
+                });
+            }
+
+            if (notifications.length === 0) {
+                notifications.push({
+                    type: 'info',
+                    title: 'All Clear',
+                    message: 'Network operating within normal parameters'
+                });
+            } else {
+                notifications.push({
+                    type: 'info',
+                    title: 'Maintenance Scheduled',
+                    message: 'Regional maintenance: Tomorrow 2-4 AM EST'
+                });
+            }
+
+            const container = document.getElementById('notificationsList');
+            container.innerHTML = '';
+            notifications.forEach(notif => {
+                const el = document.createElement('div');
+                el.className = `notification-item ${notif.type}`;
+                el.innerHTML = `<div class="notification-title">${notif.title}</div><div>${notif.message}</div>`;
+                container.appendChild(el);
+            });
+        }
+
+        function updateChart() {
+            const chart = document.getElementById('incidentsChart');
+            chart.innerHTML = '';
+            for (let i = 0; i < 7; i++) {
+                const height = Math.random() * 100;
+                const bar = document.createElement('div');
+                bar.className = 'chart-bar';
+                bar.style.height = height + '%';
+                chart.appendChild(bar);
+            }
+        }
+
+        function applyFilters() {
+            const regionFilter = document.getElementById('regionFilter').value;
+            const carrierFilter = document.getElementById('carrierFilter').value;
+            const statusFilter = document.getElementById('statusFilter').value;
+
+            filteredTowers = towers.filter(tower => {
+                return (regionFilter === '' || tower.region === regionFilter) &&
+                       (carrierFilter === '' || tower.carrier === carrierFilter) &&
+                       (statusFilter === '' || tower.status === statusFilter);
+            });
+
+            renderMarkers();
+            updateSidebar();
+
+            // Auto zoom to region
+            const bounds = regionBounds[regionFilter] || regionBounds[''];
+            map.setView(bounds.center, bounds.zoom);
+
+            // Enable/disable route button
+            const routeButton = document.getElementById('routeButton');
+            routeButton.disabled = regionFilter === '';
+        }
+
+        // Haversine formula to calculate distance between two points
+        function haversineDistance(lat1, lng1, lat2, lng2) {
+            const R = 3959; // Earth's radius in miles
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLng = (lng2 - lng1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLng/2) * Math.sin(dLng/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+
+        // Generate optimal maintenance route
+        function generateMaintenanceRoute() {
+            const regionFilter = document.getElementById('regionFilter').value;
+            if (!regionFilter) return;
+
+            // Get towers in selected region
+            let regionTowers = towers.filter(t => t.region === regionFilter);
+
+            // Sort by status priority (critical > warning > healthy)
+            const statusOrder = { critical: 0, warning: 1, healthy: 2 };
+            regionTowers.sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
+
+            // Use nearest neighbor algorithm for optimal route
+            const route = [];
+            const visited = new Set();
+            const regionBound = regionBounds[regionFilter];
+            let currentLat = regionBound.center[0];
+            let currentLng = regionBound.center[1];
+
+            while (route.length < regionTowers.length) {
+                let nearest = null;
+                let nearestDist = Infinity;
+
+                for (let tower of regionTowers) {
+                    if (visited.has(tower.id)) continue;
+                    const dist = haversineDistance(currentLat, currentLng, tower.lat, tower.lng);
+                    if (dist < nearestDist) {
+                        nearestDist = dist;
+                        nearest = tower;
+                    }
+                }
+
+                if (nearest) {
+                    route.push(nearest);
+                    visited.add(nearest.id);
+                    currentLat = nearest.lat;
+                    currentLng = nearest.lng;
+                }
+            }
+
+            // Calculate total distance
+            let totalDistance = 0;
+            currentLat = regionBound.center[0];
+            currentLng = regionBound.center[1];
+
+            for (let tower of route) {
+                totalDistance += haversineDistance(currentLat, currentLng, tower.lat, tower.lng);
+                currentLat = tower.lat;
+                currentLng = tower.lng;
+            }
+
+            // Estimate hours (average 30 min per tower + travel time)
+            const travelHours = totalDistance / 60; // 60 mph average
+            const maintenanceHours = route.length * 0.5; // 30 min per tower
+            const totalHours = Math.round((travelHours + maintenanceHours) * 10) / 10;
+
+            // Display route modal
+            displayRouteModal(route, totalDistance, totalHours);
+        }
+
+        function displayRouteModal(route, totalDistance, totalHours) {
+            document.getElementById('routeTowerCount').textContent = route.length;
+            document.getElementById('routeDistance').textContent = Math.round(totalDistance);
+            document.getElementById('routeHours').textContent = totalHours.toFixed(1);
+
+            const routeList = document.getElementById('routeList');
+            routeList.innerHTML = '';
+
+            route.forEach((tower, idx) => {
+                const item = document.createElement('div');
+                item.className = `route-item ${tower.status}`;
+                item.innerHTML = `
+                    <div class="route-item-info">
+                        <div class="route-item-title">${tower.id}</div>
+                        <div class="route-item-detail">${tower.city}, ${tower.region} • ${tower.carrier} • ${tower.status.toUpperCase()}</div>
+                    </div>
+                    <div class="route-item-order">${idx + 1}</div>
+                `;
+                routeList.appendChild(item);
+            });
+
+            document.getElementById('routeModal').classList.add('active');
+        }
+
+        function closeRouteModal() {
+            document.getElementById('routeModal').classList.remove('active');
+        }
+
+        function openIncidentDashboard() {
+            document.getElementById('incidentModal').classList.add('active');
+            updateIncidentMetrics();
+        }
+
+        function closeIncidentDashboard() {
+            document.getElementById('incidentModal').classList.remove('active');
+        }
+
+        function updateIncidentMetrics() {
+            const timeframe = document.getElementById('incidentTimeframe').value;
+            const metrics = calculateIncidentMetrics(timeframe);
+
+            document.getElementById('totalIncidents').textContent = metrics.total;
+            document.getElementById('incidentsDetail').textContent = `Critical: ${metrics.critical}, Warning: ${metrics.warning}, Other: ${metrics.other}`;
+            document.getElementById('totalDowntime').textContent = metrics.downtime;
+            document.getElementById('downtimeDetail').textContent = `Avg ${metrics.avgDowntime} per incident`;
+            document.getElementById('incidentRate').textContent = metrics.rate;
+        }
+
+        function calculateIncidentMetrics(days) {
+            // Calculate based on filtered towers
+            const criticalCount = filteredTowers.filter(t => t.status === 'critical').length;
+            const warningCount = filteredTowers.filter(t => t.status === 'warning').length;
+            const totalTowers = filteredTowers.length || towers.length;
+
+            // Realistic incident calculations
+            const factor = days / 90;
+            const baseIncidents = 24;
+            const baseCritical = 3;
+            const baseWarning = 8;
+            const baseDowntime = 28; // hours
+            const baseAvgDowntime = 70; // minutes
+
+            const total = Math.round(baseIncidents * factor);
+            const critical = Math.round(baseCritical * factor);
+            const warning = Math.round(baseWarning * factor);
+            const other = total - critical - warning;
+            const downtime = Math.round(baseDowntime * factor);
+            const avgDowntime = Math.round(baseAvgDowntime * factor);
+            const rate = (total / days * 30 / (totalTowers / 500)).toFixed(1);
+
+            return {
+                total: total,
+                critical: critical,
+                warning: warning,
+                other: other,
+                downtime: downtime + 'h',
+                avgDowntime: avgDowntime + ' min',
+                rate: rate + '/mo'
+            };
+        }
+
+        function showTowerDetail(tower) {
+            selectedTower = tower;
+            document.getElementById('detailTitle').textContent = tower.id;
+            document.getElementById('detailAddress').textContent = `${tower.city}, ${tower.region}`;
+            document.getElementById('detailPower').textContent = tower.power + '%';
+            document.getElementById('detailTemperature').textContent = tower.temperature + '°C';
+            document.getElementById('detailUptime').textContent = tower.uptime + '%';
+            document.getElementById('detailTransmission').textContent = tower.transmission + '%';
+            document.getElementById('detailCarrier').textContent = tower.carrier;
+            document.getElementById('detailRegion').textContent = tower.region;
+            document.getElementById('detailLastUpdate').textContent = tower.lastUpdate;
+            document.getElementById('detailLastIncident').textContent = tower.lastIncident;
+
+            // Display status reasoning
+            displayStatusReasoning(tower);
+
+            document.getElementById('detailPanel').classList.add('active');
+        }
+
+        function displayStatusReasoning(tower) {
+            const reasoning = calculateStatusReasoning(tower);
+            const reasoningDiv = document.getElementById('statusReasoning');
+
+            const statusClass = tower.status;
+            const statusIcon = tower.status === 'healthy' ? '✓' : tower.status === 'warning' ? '⚠' : '✕';
+            const statusLabel = tower.status.charAt(0).toUpperCase() + tower.status.slice(1);
+            const reasoningClass = `reasoning-${tower.status}`;
+
+            let html = `
+                <div class="reasoning-title ${reasoningClass}">
+                    ${statusIcon} ${statusLabel} Status
+                </div>
+                <div class="reasoning-items">
+            `;
+
+            reasoning.items.forEach(item => {
+                const itemClass = item.pass ? 'pass' : 'fail';
+                html += `<div class="reasoning-item ${itemClass}">
+                    <span class="reasoning-icon">${item.pass ? '✓' : '✕'}</span>
+                    ${item.text}
+                </div>`;
+            });
+
+            html += `</div>
+                <div class="reasoning-action ${statusClass}">
+                    ${reasoning.action}
+                </div>
+            `;
+
+            reasoningDiv.innerHTML = html;
+        }
+
+        function calculateStatusReasoning(tower) {
+            const thresholds = {
+                healthy: {
+                    powerMin: 50, powerMax: 85,
+                    tempMin: 20, tempMax: 45,
+                    uptimeMin: 95,
+                    transmissionMin: 80,
+                    incidentDaysMin: 30
+                },
+                warning: {
+                    powerMin: 40, powerMax: 95,
+                    tempMin: 15, tempMax: 50,
+                    uptimeMin: 90,
+                    transmissionMin: 70,
+                    incidentDaysMin: 15
+                }
+            };
+
+            let reasons = { items: [], action: '' };
+            let detailedReasons = [];
+
+            // Power check
+            if (tower.power >= thresholds.healthy.powerMin && tower.power <= thresholds.healthy.powerMax) {
+                detailedReasons.push({ pass: true, text: `Power usage ${tower.power}% (within normal 50-85%)` });
+            } else if (tower.power >= thresholds.warning.powerMin && tower.power <= thresholds.warning.powerMax) {
+                detailedReasons.push({ pass: false, text: `Power usage ${tower.power}% (outside normal range)` });
+            } else {
+                detailedReasons.push({ pass: false, text: `Power usage ${tower.power}% (severe anomaly)` });
+            }
+
+            // Temperature check
+            if (tower.temperature >= thresholds.healthy.tempMin && tower.temperature <= thresholds.healthy.tempMax) {
+                detailedReasons.push({ pass: true, text: `Temperature ${tower.temperature}°C (within safe range)` });
+            } else if (tower.temperature >= thresholds.warning.tempMin && tower.temperature <= thresholds.warning.tempMax) {
+                detailedReasons.push({ pass: false, text: `Temperature ${tower.temperature}°C (approaching limits)` });
+            } else {
+                detailedReasons.push({ pass: false, text: `Temperature ${tower.temperature}°C (outside safe operating range)` });
+            }
+
+            // Uptime check
+            if (tower.uptime >= thresholds.healthy.uptimeMin) {
+                detailedReasons.push({ pass: true, text: `Uptime ${tower.uptime}% (exceeds minimum)` });
+            } else if (tower.uptime >= thresholds.warning.uptimeMin) {
+                detailedReasons.push({ pass: false, text: `Uptime ${tower.uptime}% (slight degradation)` });
+            } else {
+                detailedReasons.push({ pass: false, text: `Uptime ${tower.uptime}% (critical downtime)` });
+            }
+
+            // Transmission check
+            if (tower.transmission >= thresholds.healthy.transmissionMin) {
+                detailedReasons.push({ pass: true, text: `Transmission ${tower.transmission}% (healthy signal quality)` });
+            } else if (tower.transmission >= thresholds.warning.transmissionMin) {
+                detailedReasons.push({ pass: false, text: `Transmission ${tower.transmission}% (mild packet loss)` });
+            } else {
+                detailedReasons.push({ pass: false, text: `Transmission ${tower.transmission}% (significant packet loss)` });
+            }
+
+            // Recent incident check
+            const incidentDays = parseInt(tower.lastIncident.split('h')[0]) ? parseInt(tower.lastIncident.split('h')[0]) / 24 : parseInt(tower.lastIncident.split('d')[0]) || 100;
+            if (tower.lastIncident === 'None') {
+                detailedReasons.push({ pass: true, text: 'No recent incidents' });
+            } else if (incidentDays < 15) {
+                detailedReasons.push({ pass: false, text: `Last incident ${tower.lastIncident} ago (recent activity)` });
+            } else if (incidentDays < 30) {
+                detailedReasons.push({ pass: false, text: `Last incident ${tower.lastIncident} ago (trending up)` });
+            } else {
+                detailedReasons.push({ pass: true, text: `Last incident ${tower.lastIncident} ago (stable)` });
+            }
+
+            reasons.items = detailedReasons;
+
+            // Determine action
+            if (tower.status === 'healthy') {
+                reasons.action = '▶ Continue monitoring. All systems operating normally.';
+            } else if (tower.status === 'warning') {
+                reasons.action = '▶ Schedule preventive maintenance within 7 days to prevent escalation.';
+            } else {
+                reasons.action = '▶ Escalate to maintenance crew immediately. Critical issue requires urgent attention.';
+            }
+
+            return reasons;
+        }
+
+        function closeDetailPanel() {
+            document.getElementById('detailPanel').classList.remove('active');
+            selectedTower = null;
+        }
+
+        function toggleNotifications() {
+            const list = document.getElementById('notificationsList');
+            const toggle = document.getElementById('notifToggle');
+            list.classList.toggle('visible');
+            toggle.classList.toggle('expanded');
+        }
+
+        function setupEventListeners() {
+            document.getElementById('regionFilter').addEventListener('change', applyFilters);
+            document.getElementById('carrierFilter').addEventListener('change', applyFilters);
+            document.getElementById('statusFilter').addEventListener('change', applyFilters);
+        }
+
+        // Start app
+        window.addEventListener('load', initMap);
+    </script>
+</body>
+</html>
